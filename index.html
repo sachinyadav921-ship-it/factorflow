@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>FactorFlow — Smart SIP Allocator</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+  body{background:#070b12;color:#e2e8f0;font-family:'DM Sans',sans-serif;overscroll-behavior:none}
+  ::-webkit-scrollbar{display:none}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes slideIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef } = React;
+
+// ── NSE LIVE DATA PROXIES (multiple fallbacks) ────────────
+const PROXIES = [
+  "https://api.allorigins.win/raw?url=",
+  "https://corsproxy.io/?",
+  "https://api.codetabs.com/v1/proxy?quest=",
+];
+
+async function fetchWithFallback(url) {
+  for (let proxy of PROXIES) {
+    try {
+      const res = await fetch(proxy + encodeURIComponent(url), {
+        headers: { "Accept": "application/json" },
+        signal: AbortSignal.timeout(8000)
+      });
+      if (res.ok) {
+        const text = await res.text();
+        return JSON.parse(text);
+      }
+    } catch(e) { continue; }
+  }
+  return null;
+}
+
+// ── FETCH LIVE NSE DATA ───────────────────────────────────
+async function fetchLiveNSE() {
+  try {
+    const [niftyData, vixData] = await Promise.all([
+      fetchWithFallback("https://www.nseindia.com/api/equity-stockIndices?index=NIFTY%2050"),
+      fetchWithFallback("https://www.nseindia.com/api/equity-stockIndices?index=INDIA%20VIX"),
+    ]);
+
+    if (!niftyData || !vixData) return null;
+
+    const nifty = niftyData?.data?.[0];
+    const vix   = vixData?.data?.[0];
+
+    if (!nifty || !vix) return null;
+
+    return {
+      nifty50:   parseFloat(nifty.last        ?? 22187),
+      niftyPE:   parseFloat(nifty.pe          ?? 21.4),
+      niftyChg:  parseFloat(nifty.pChange     ?? 0),
+      niftyOpen: parseFloat(nifty.open        ?? 0),
+      niftyHigh: parseFloat(nifty.high        ?? 0),
+      niftyLow:  parseFloat(nifty.low         ?? 0),
+      vix:       parseFloat(vix.last          ?? 13.8),
+      vixChg:    parseFloat(vix.pChange       ?? 0),
+      fetchedAt: new Date().toLocaleTimeString("en-IN"),
+      isLive:    true,
+    };
+  } catch(e) {
+    return null;
+  }
+}
+
+// ── ALLOCATION ENGINE ─────────────────────────────────────
+function computeAllocation(sig) {
+  const { niftyPE, vix, momentum3M = 3 } = sig;
+  const peScore  = Math.min(Math.max((niftyPE - 18) / 12, 0), 1);
+  const vixScore = Math.min(Math.max((vix - 12) / 24, 0), 1);
+  const momScore = Math.min(Math.max((-momentum3M) / 20, 0), 1);
+  const goldRaw  = peScore * 0.4 + vixScore * 0.35 + momScore * 0.25;
+  const gold     = Math.round(5 + goldRaw * 25);
+  const equity   = 100 - gold;
+  const momF  = Math.max(0, (momentum3M / 15) * (1 - vixScore));
+  const qualF = 0.5 + vixScore * 0.5;
+  const valF  = Math.max(0, (niftyPE - 18) / 12);
+  const lvF   = Math.min(1, vixScore * 1.5);
+  const total = momF + qualF + valF + lvF || 1;
+  let alloc = {
+    momentum: Math.round((momF  / total) * equity),
+    quality:  Math.round((qualF / total) * equity),
+    value:    Math.round((valF  / total) * equity),
+    lowvol:   Math.round((lvF   / total) * equity),
+    gold,
+  };
+  const sum = Object.values(alloc).reduce((a,b) => a+b, 0);
+  alloc.quality += (100 - sum);
+  return alloc;
+}
+
+const MOCK = {
+  nifty50:22187, niftyPE:21.4, niftyChg:0.64,
+  niftyOpen:22100, niftyHigh:22300, niftyLow:22050,
+  vix:13.8, vixChg:-2.1, momentum3M:3.1, isLive:false
+};
+
+const FUNDS = [
+  { key:"momentum", label:"Momentum",    fund:"Nifty200 Momentum 30",  color:"#f97316", icon:"⚡", desc:"Rides trending winners"   },
+  { key:"quality",  label:"Quality",     fund:"Nifty200 Quality 30",   color:"#38bdf8", icon:"💎", desc:"High ROE, low debt firms" },
+  { key:"value",    label:"Value",       fund:"Nifty500 Value 50",     color:"#a78bfa", icon:"🏷️", desc:"Cheap vs fundamentals"   },
+  { key:"lowvol",   label:"Low Vol",     fund:"Nifty Alpha LowVol 30", color:"#34d399", icon:"🛡️", desc:"Defensive factor hedge"  },
+  { key:"gold",     label:"Gold",        fund:"Nippon Gold BeES",      color:"#fbbf24", icon:"🥇", desc:"Safe haven + inflation"  },
+];
+
+// ── DONUT ─────────────────────────────────────────────────
+function Donut({ alloc, size=140 }) {
+  const cx=size/2, cy=size/2, r=size*0.36, sw=size*0.14;
+  const C = {momentum:"#f97316",quality:"#38bdf8",value:"#a78bfa",lowvol:"#34d399",gold:"#fbbf24"};
+  let cum=-90;
+  const slices = FUNDS.map(f => {
+    const angle=(alloc[f.key]/100)*360, s=cum; cum+=angle;
+    return {...f,angle,start:s};
+  });
+  function arc(cx,cy,r,s,a) {
+    const sr=s*Math.PI/180, er=(s+a)*Math.PI/180;
+    return `M ${cx+r*Math.cos(sr)} ${cy+r*Math.sin(sr)} A ${r} ${r} 0 ${a>180?1:0} 1 ${cx+r*Math.cos(er)} ${cy+r*Math.sin(er)}`;
+  }
+  return (
+    <svg width={size} height={size}>
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth={sw}/>
+      {slices.map((sl,i) => sl.angle>0.5 && (
+        <path key={i} d={arc(cx,cy,r,sl.start,sl.angle)} fill="none" stroke={C[sl.key]} strokeWidth={sw} strokeLinecap="butt" opacity={0.9}/>
+      ))}
+      <text x={cx} y={cy-7} textAnchor="middle" fill="#e2e8f0" fontSize={size*0.1} fontFamily="Syne" fontWeight="800">{alloc.gold}%</text>
+      <text x={cx} y={cy+9} textAnchor="middle" fill="#64748b" fontSize={size*0.058}>Gold</text>
+    </svg>
+  );
+}
+
+function Bar({ pct, color }) {
+  const [w, setW] = useState(0);
+  useEffect(() => { const t=setTimeout(()=>setW(pct),80); return ()=>clearTimeout(t); }, [pct]);
+  return (
+    <div style={{height:"5px",background:"rgba(255,255,255,0.05)",borderRadius:"3px",overflow:"hidden",marginTop:"6px"}}>
+      <div style={{height:"100%",width:`${w}%`,background:color,borderRadius:"3px",transition:"width 0.9s cubic-bezier(0.34,1.56,0.64,1)"}}/>
+    </div>
+  );
+}
+
+// ── MAIN APP ──────────────────────────────────────────────
+function App() {
+  const [tab,       setTab]       = useState("home");
+  const [signals,   setSignals]   = useState(MOCK);
+  const [alloc,     setAlloc]     = useState(()=>computeAllocation(MOCK));
+  const [prev,      setPrev]      = useState(null);
+  const [applied,   setApplied]   = useState(false);
+  const [fetching,  setFetching]  = useState(false);
+  const [fetchMsg,  setFetchMsg]  = useState("");
+  const [aiText,    setAiText]    = useState("");
+  const [aiLoad,    setAiLoad]    = useState(false);
+  const [toast,     setToast]     = useState("");
+  const timerRef = useRef(null);
+
+  function showToast(msg) {
+    setToast(msg);
+    setTimeout(() => setToast(""), 3000);
+  }
+
+  // Auto-refresh every 5 minutes
+  useEffect(() => {
+    timerRef.current = setInterval(() => fetchLive(true), 5 * 60 * 1000);
+    return () => clearInterval(timerRef.current);
+  }, []);
+
+  async function fetchLive(silent=false) {
+    if (!silent) setFetching(true);
+    setFetchMsg("Connecting to NSE India...");
+    const data = await fetchLiveNSE();
+    if (data) {
+      const newAlloc = computeAllocation({...data, momentum3M: signals.momentum3M ?? 3});
+      setPrev(alloc);
+      setSignals({...data, momentum3M: signals.momentum3M ?? 3});
+      setAlloc(newAlloc);
+      setApplied(false);
+      setAiText("");
+      showToast(`✅ Live data updated · ${data.fetchedAt}`);
+    } else {
+      showToast("⚠️ NSE unavailable — using demo data");
+    }
+    setFetchMsg("");
+    if (!silent) setFetching(false);
+  }
+
+  async function askClaude() {
+    setAiLoad(true); setAiText("");
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({
+          model:"claude-sonnet-4-20250514", max_tokens:1000,
+          messages:[{ role:"user", content:
+            `You are an Indian quant fund advisor. Current NSE market data:
+- Nifty 50: ${signals.nifty50.toLocaleString("en-IN")} (${signals.niftyChg>0?"+":""}${signals.niftyChg}%)
+- Nifty PE: ${signals.niftyPE} | India VIX: ${signals.vix}
+- 3M Momentum: ${signals.momentum3M}%
+- Data: ${signals.isLive ? "LIVE from NSE" : "Demo data"}
+
+Auto-allocation engine output:
+Momentum=${alloc.momentum}%, Quality=${alloc.quality}%, Value=${alloc.value}%, LowVol=${alloc.lowvol}%, Gold=${alloc.gold}%
+
+In 4-5 lines explain WHY each factor has this exact weight right now. Be specific about PE=${signals.niftyPE} and VIX=${signals.vix}. Use simple language for retail Indian investors.`
+          }]
+        })
+      });
+      const d = await res.json();
+      setAiText(d.content?.map(b=>b.text||"").join("") || "No response.");
+    } catch { setAiText("Could not reach AI. Please check your connection."); }
+    setAiLoad(false);
+  }
+
+  const tabs = [
+    {id:"home",   icon:"⊞", label:"Home"},
+    {id:"alloc",  icon:"◈", label:"Allocate"},
+    {id:"signals",icon:"◎", label:"Signals"},
+    {id:"ai",     icon:"✦", label:"AI Why"},
+  ];
+
+  const peColor   = signals.niftyPE>24 ? "#f87171" : signals.niftyPE<20 ? "#34d399" : "#fbbf24";
+  const vixColor  = signals.vix>20 ? "#f87171" : signals.vix<14 ? "#34d399" : "#fbbf24";
+  const peLabel   = signals.niftyPE>24 ? "Overvalued" : signals.niftyPE<20 ? "Undervalued" : "Fair Value";
+  const vixLabel  = signals.vix>20 ? "High Fear" : signals.vix<14 ? "Low Fear" : "Moderate";
+
+  return (
+    <div style={{minHeight:"100vh",background:"#070b12",fontFamily:"'DM Sans',sans-serif",color:"#e2e8f0"}}>
+      {/* Glow */}
+      <div style={{position:"fixed",top:"-80px",right:"-80px",width:"300px",height:"300px",borderRadius:"50%",background:"radial-gradient(circle,rgba(251,191,36,0.07) 0%,transparent 70%)",pointerEvents:"none",zIndex:0}}/>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{position:"fixed",top:"16px",left:"50%",transform:"translateX(-50%)",background:"rgba(15,23,42,0.95)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"12px",padding:"10px 16px",fontSize:"12px",fontWeight:600,zIndex:999,whiteSpace:"nowrap",boxShadow:"0 8px 32px rgba(0,0,0,0.5)",animation:"fadeIn 0.3s ease"}}>
+          {toast}
+        </div>
+      )}
+
+      <div style={{position:"relative",zIndex:1,maxWidth:"430px",margin:"0 auto",paddingBottom:"84px"}}>
+
+        {/* HEADER */}
+        <div style={{padding:"20px 20px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontFamily:"'Syne',sans-serif",fontSize:"22px",fontWeight:800,letterSpacing:"-0.5px"}}>
+              FACTOR<span style={{color:"#fbbf24"}}>FLOW</span>
+            </div>
+            <div style={{fontSize:"10px",color:"#475569",letterSpacing:"0.8px"}}>AUTO-ALLOCATION ENGINE</div>
+          </div>
+          <button onClick={()=>fetchLive(false)} disabled={fetching} style={{
+            display:"flex",alignItems:"center",gap:"5px",
+            background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.2)",
+            borderRadius:"20px",padding:"7px 12px",
+            color:fetching?"#475569":"#fbbf24",fontSize:"11px",fontWeight:600,
+            cursor:fetching?"not-allowed":"pointer",fontFamily:"'DM Sans',sans-serif"
+          }}>
+            {fetching
+              ? <span style={{width:"10px",height:"10px",border:"2px solid #fbbf24",borderTopColor:"transparent",borderRadius:"50%",display:"inline-block",animation:"spin 0.8s linear infinite"}}/>
+              : <span style={{width:"6px",height:"6px",borderRadius:"50%",background:signals.isLive?"#34d399":"#475569",display:"inline-block"}}/>
+            }
+            {fetching ? "Fetching..." : signals.isLive ? `Live · ${signals.fetchedAt}` : "Get Live NSE"}
+          </button>
+        </div>
+
+        {fetchMsg && (
+          <div style={{margin:"0 20px 12px",background:"rgba(251,191,36,0.06)",border:"1px solid rgba(251,191,36,0.15)",borderRadius:"10px",padding:"8px 14px",fontSize:"11px",color:"#fbbf24",animation:"fadeIn 0.3s ease"}}>
+            ⏳ {fetchMsg}
+          </div>
+        )}
+
+        {/* ═══ HOME TAB ═══ */}
+        {tab==="home" && (
+          <div style={{padding:"0 20px",animation:"fadeIn 0.3s ease"}}>
+
+            {/* Live status banner */}
+            {signals.isLive && (
+              <div style={{background:"rgba(52,211,153,0.06)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:"12px",padding:"8px 14px",marginBottom:"12px",display:"flex",alignItems:"center",gap:"8px",fontSize:"11px",color:"#34d399",fontWeight:600}}>
+                <span style={{width:"6px",height:"6px",borderRadius:"50%",background:"#34d399",display:"inline-block",animation:"pulse 2s infinite"}}/>
+                LIVE DATA — NSE India · Updated {signals.fetchedAt}
+              </div>
+            )}
+
+            {/* Nifty Card */}
+            <div style={{background:"linear-gradient(135deg,rgba(15,23,42,0.95),rgba(20,32,54,0.7))",border:"1px solid rgba(255,255,255,0.05)",borderRadius:"18px",padding:"18px",marginBottom:"12px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"12px"}}>
+                <div>
+                  <div style={{fontSize:"10px",color:"#475569",fontWeight:600,letterSpacing:"0.8px",marginBottom:"4px"}}>NIFTY 50</div>
+                  <div style={{fontFamily:"'Syne',sans-serif",fontSize:"32px",fontWeight:800,lineHeight:1}}>{signals.nifty50.toLocaleString("en-IN")}</div>
+                  <div style={{fontSize:"12px",color:signals.niftyChg>=0?"#34d399":"#f87171",marginTop:"4px",fontWeight:600}}>
+                    {signals.niftyChg>=0?"▲":"▼"} {Math.abs(signals.niftyChg).toFixed(2)}% today
+                  </div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:"10px",color:"#475569",marginBottom:"2px"}}>PE Ratio</div>
+                  <div style={{fontFamily:"'Syne',sans-serif",fontSize:"26px",fontWeight:800,color:peColor}}>{signals.niftyPE}</div>
+                  <div style={{fontSize:"10px",color:peColor,fontWeight:600,marginTop:"2px"}}>{peLabel}</div>
+                </div>
+              </div>
+              {signals.isLive && (
+                <div style={{display:"flex",gap:"8px",paddingTop:"10px",borderTop:"1px solid rgba(255,255,255,0.04)"}}>
+                  {[["Open",signals.niftyOpen],["High",signals.niftyHigh],["Low",signals.niftyLow]].map(([l,v])=>(
+                    <div key={l} style={{flex:1,textAlign:"center",background:"rgba(255,255,255,0.02)",borderRadius:"8px",padding:"6px"}}>
+                      <div style={{fontSize:"9px",color:"#475569",marginBottom:"2px"}}>{l}</div>
+                      <div style={{fontSize:"11px",fontWeight:600}}>{v.toLocaleString("en-IN")}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* VIX + PE signals */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"12px"}}>
+              <div style={{background:"rgba(255,255,255,0.02)",border:`1px solid ${vixColor}20`,borderRadius:"12px",padding:"13px"}}>
+                <div style={{fontSize:"10px",color:"#475569",fontWeight:600,letterSpacing:"0.4px",marginBottom:"3px"}}>INDIA VIX</div>
+                <div style={{fontFamily:"'Syne',sans-serif",fontSize:"22px",fontWeight:800,color:vixColor}}>{signals.vix}</div>
+                <div style={{fontSize:"10px",color:vixColor,fontWeight:600,marginTop:"2px"}}>{vixLabel}</div>
+                {signals.isLive && <div style={{fontSize:"10px",color:"#475569",marginTop:"2px"}}>{signals.vixChg>=0?"▲":"▼"} {Math.abs(signals.vixChg).toFixed(2)}%</div>}
+              </div>
+              <div style={{background:"rgba(255,255,255,0.02)",border:`1px solid ${peColor}20`,borderRadius:"12px",padding:"13px"}}>
+                <div style={{fontSize:"10px",color:"#475569",fontWeight:600,letterSpacing:"0.4px",marginBottom:"3px"}}>GOLD ALLOC</div>
+                <div style={{fontFamily:"'Syne',sans-serif",fontSize:"22px",fontWeight:800,color:"#fbbf24"}}>{alloc.gold}%</div>
+                <div style={{fontSize:"10px",color:"#64748b",marginTop:"2px"}}>Dynamic 5%→30%</div>
+                <div style={{position:"relative",height:"4px",background:"rgba(255,255,255,0.06)",borderRadius:"2px",marginTop:"6px"}}>
+                  <div style={{height:"100%",background:"#fbbf24",borderRadius:"2px",width:`${((alloc.gold-5)/25)*100}%`,transition:"width 0.9s cubic-bezier(0.34,1.56,0.64,1)"}}/>
+                </div>
+              </div>
+            </div>
+
+            {/* Allocation preview */}
+            <div style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.05)",borderRadius:"16px",padding:"16px",marginBottom:"12px"}}>
+              <div style={{fontSize:"11px",color:"#475569",fontWeight:600,letterSpacing:"0.5px",marginBottom:"12px"}}>AUTO ALLOCATION</div>
+              {FUNDS.map(f => (
+                <div key={f.key} style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"8px"}}>
+                  <span style={{fontSize:"14px",width:"20px",textAlign:"center"}}>{f.icon}</span>
+                  <div style={{flex:1}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:"3px"}}>
+                      <span style={{fontSize:"11px",color:"#94a3b8"}}>{f.label}</span>
+                      <span style={{fontSize:"12px",fontWeight:700,color:f.color,fontFamily:"'Syne',sans-serif"}}>{alloc[f.key]}%</span>
+                    </div>
+                    <Bar pct={alloc[f.key]} color={f.color}/>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tap to allocate */}
+            <button onClick={()=>setTab("alloc")} style={{width:"100%",padding:"14px",background:"linear-gradient(135deg,rgba(251,191,36,0.18),rgba(251,191,36,0.06))",border:"1px solid rgba(251,191,36,0.3)",borderRadius:"14px",color:"#fbbf24",fontWeight:700,fontSize:"14px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",letterSpacing:"0.3px"}}>
+              ⚡ View Full Allocation →
+            </button>
+          </div>
+        )}
+
+        {/* ═══ ALLOCATION TAB ═══ */}
+        {tab==="alloc" && (
+          <div style={{padding:"0 20px",animation:"fadeIn 0.3s ease"}}>
+            <div style={{display:"flex",gap:"14px",alignItems:"center",background:"linear-gradient(135deg,rgba(15,23,42,0.95),rgba(20,32,54,0.6))",border:"1px solid rgba(255,255,255,0.04)",borderRadius:"18px",padding:"18px",marginBottom:"12px"}}>
+              <Donut alloc={alloc} size={130}/>
+              <div style={{flex:1}}>
+                <div style={{fontSize:"10px",color:"#475569",fontWeight:600,letterSpacing:"0.5px",marginBottom:"8px"}}>RECOMMENDED MIX</div>
+                {FUNDS.map(f=>(
+                  <div key={f.key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"5px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:"5px"}}>
+                      <div style={{width:"7px",height:"7px",borderRadius:"50%",background:f.color}}/>
+                      <span style={{fontSize:"12px",color:"#94a3b8"}}>{f.label}</span>
+                    </div>
+                    <span style={{fontSize:"13px",fontWeight:700,color:f.color,fontFamily:"'Syne',sans-serif"}}>{alloc[f.key]}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {FUNDS.map(f => {
+              const delta = prev ? alloc[f.key]-prev[f.key] : 0;
+              return (
+                <div key={f.key} style={{background:"rgba(15,23,42,0.85)",border:`1px solid ${f.color}18`,borderLeft:`3px solid ${f.color}`,borderRadius:"14px",padding:"13px",marginBottom:"9px",animation:"slideIn 0.3s ease"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",gap:"5px"}}>
+                        <span style={{fontSize:"15px"}}>{f.icon}</span>
+                        <span style={{fontSize:"13px",fontWeight:600}}>{f.label}</span>
+                        {delta!==0 && (
+                          <span style={{fontSize:"10px",fontWeight:700,color:delta>0?"#34d399":"#f87171",background:delta>0?"rgba(52,211,153,0.1)":"rgba(248,113,113,0.1)",borderRadius:"5px",padding:"1px 5px"}}>
+                            {delta>0?"▲":"▼"}{Math.abs(delta)}%
+                          </span>
+                        )}
+                      </div>
+                      <div style={{fontSize:"10px",color:"#475569",marginTop:"2px"}}>{f.fund}</div>
+                      <div style={{fontSize:"10px",color:"#334155",marginTop:"1px"}}>{f.desc}</div>
+                    </div>
+                    <div style={{fontFamily:"'Syne',sans-serif",fontSize:"24px",fontWeight:800,color:f.color}}>{alloc[f.key]}%</div>
+                  </div>
+                  <Bar pct={alloc[f.key]} color={f.color}/>
+                </div>
+              );
+            })}
+
+            {!applied
+              ? <button onClick={()=>{setApplied(true);showToast("✅ Allocation applied!");}} style={{width:"100%",padding:"14px",background:"linear-gradient(135deg,rgba(251,191,36,0.2),rgba(251,191,36,0.07))",border:"1px solid rgba(251,191,36,0.3)",borderRadius:"14px",color:"#fbbf24",fontWeight:700,fontSize:"14px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginTop:"4px"}}>
+                  ⚡ Apply This Allocation
+                </button>
+              : <div style={{textAlign:"center",padding:"14px",color:"#34d399",fontWeight:600,fontSize:"13px",background:"rgba(52,211,153,0.06)",border:"1px solid rgba(52,211,153,0.2)",borderRadius:"14px",marginTop:"4px"}}>
+                  ✓ Allocation applied — rebalances on next SIP cycle
+                </div>
+            }
+          </div>
+        )}
+
+        {/* ═══ SIGNALS TAB ═══ */}
+        {tab==="signals" && (
+          <div style={{padding:"0 20px",animation:"fadeIn 0.3s ease"}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"14px"}}>
+              {[
+                {label:"NIFTY PE",    value:signals.niftyPE,  extra:"",         warn:peLabel,  col:peColor},
+                {label:"INDIA VIX",   value:signals.vix,      extra:"",         warn:vixLabel, col:vixColor},
+                {label:"NIFTY 50",    value:signals.nifty50.toLocaleString("en-IN"), extra:"", warn:signals.niftyChg>=0?"Positive":"Negative", col:signals.niftyChg>=0?"#34d399":"#f87171"},
+                {label:"GOLD ALLOC",  value:alloc.gold+"%",   extra:"",         warn:"Dynamic", col:"#fbbf24"},
+              ].map((s,i)=>(
+                <div key={i} style={{background:"rgba(255,255,255,0.02)",border:`1px solid ${s.col}20`,borderRadius:"12px",padding:"13px"}}>
+                  <div style={{fontSize:"10px",color:"#475569",fontWeight:600,letterSpacing:"0.4px",marginBottom:"3px"}}>{s.label}</div>
+                  <div style={{fontFamily:"'Syne',sans-serif",fontSize:"20px",fontWeight:800,color:s.col,margin:"2px 0"}}>{s.value}</div>
+                  <div style={{fontSize:"10px",color:s.col,fontWeight:600}}>{s.warn}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.05)",borderRadius:"16px",padding:"16px",marginBottom:"12px"}}>
+              <div style={{fontSize:"11px",color:"#475569",fontWeight:600,letterSpacing:"0.5px",marginBottom:"12px"}}>SIGNAL → ALLOCATION LOGIC</div>
+              {[
+                {icon:"📊",s:"PE > 24",  e:"Gold ↑ + Value ↑",    d:"Market overvalued → safe haven + value tilt"},
+                {icon:"📉",s:"PE < 20",  e:"Momentum ↑ + Gold ↓", d:"Undervalued → go aggressive on equity"},
+                {icon:"😰",s:"VIX > 20", e:"Gold ↑ + LowVol ↑",   d:"High fear → defensive shift"},
+                {icon:"⚡",s:"Mom +ve",  e:"Momentum ↑",           d:"Strong trend → ride winners"},
+                {icon:"🛡️",s:"Mom −ve",  e:"Quality ↑ + LowVol ↑", d:"Falling market → quality protection"},
+              ].map((r,i)=>(
+                <div key={i} style={{display:"flex",gap:"10px",marginBottom:"10px",alignItems:"flex-start"}}>
+                  <span style={{fontSize:"18px",flexShrink:0}}>{r.icon}</span>
+                  <div>
+                    <div style={{fontSize:"12px",fontWeight:600,color:"#cbd5e1"}}>{r.s} → <span style={{color:"#fbbf24"}}>{r.e}</span></div>
+                    <div style={{fontSize:"11px",color:"#475569",marginTop:"1px"}}>{r.d}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{background:"rgba(251,191,36,0.05)",border:"1px solid rgba(251,191,36,0.15)",borderRadius:"12px",padding:"12px"}}>
+              <div style={{fontSize:"11px",color:"#fbbf24",fontWeight:600,marginBottom:"6px"}}>🔄 Auto Refresh</div>
+              <div style={{fontSize:"12px",color:"#64748b"}}>App fetches fresh NSE data every 5 minutes automatically when open. Tap "Get Live NSE" button anytime for instant update.</div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ AI TAB ═══ */}
+        {tab==="ai" && (
+          <div style={{padding:"0 20px",animation:"fadeIn 0.3s ease"}}>
+            <div style={{background:"rgba(99,102,241,0.07)",border:"1px solid rgba(99,102,241,0.18)",borderRadius:"16px",padding:"14px",marginBottom:"14px"}}>
+              <div style={{fontSize:"10px",color:"#818cf8",fontWeight:600,letterSpacing:"0.8px",marginBottom:"4px"}}>
+                {signals.isLive ? "🟢 LIVE NSE DATA" : "⚪ DEMO DATA"}
+              </div>
+              <div style={{display:"flex",gap:"14px",flexWrap:"wrap"}}>
+                {[["PE",signals.niftyPE],["VIX",signals.vix],["Nifty",signals.nifty50.toLocaleString("en-IN")],["Gold",alloc.gold+"%"]].map(([k,v])=>(
+                  <div key={k}><span style={{color:"#475569",fontSize:"11px"}}>{k} </span><span style={{fontWeight:700,color:"#e2e8f0",fontSize:"13px"}}>{v}</span></div>
+                ))}
+              </div>
+            </div>
+
+            <button onClick={askClaude} disabled={aiLoad} style={{
+              width:"100%",padding:"14px",marginBottom:"14px",
+              background:aiLoad?"rgba(255,255,255,0.02)":"linear-gradient(135deg,rgba(99,102,241,0.2),rgba(99,102,241,0.07))",
+              border:"1px solid rgba(99,102,241,0.25)",borderRadius:"12px",
+              color:aiLoad?"#475569":"#818cf8",fontWeight:700,fontSize:"13px",
+              cursor:aiLoad?"not-allowed":"pointer",fontFamily:"'DM Sans',sans-serif",
+              display:"flex",alignItems:"center",justifyContent:"center",gap:"8px"
+            }}>
+              {aiLoad
+                ? <><span style={{width:"14px",height:"14px",border:"2px solid #6366f1",borderTopColor:"transparent",borderRadius:"50%",display:"inline-block",animation:"spin 0.8s linear infinite"}}/> Analysing...</>
+                : "✦ Ask Claude to Explain This Allocation"
+              }
+            </button>
+
+            {aiText && (
+              <div style={{background:"rgba(15,23,42,0.9)",border:"1px solid rgba(99,102,241,0.15)",borderRadius:"14px",padding:"16px",marginBottom:"14px",animation:"fadeIn 0.4s ease"}}>
+                <div style={{fontSize:"10px",color:"#6366f1",fontWeight:600,letterSpacing:"0.5px",marginBottom:"8px"}}>CLAUDE'S ANALYSIS</div>
+                <div style={{fontSize:"13px",color:"#cbd5e1",lineHeight:1.85}}>{aiText}</div>
+              </div>
+            )}
+
+            <div style={{fontSize:"11px",color:"#475569",fontWeight:600,letterSpacing:"0.5px",marginBottom:"10px"}}>CURRENT ALLOCATION</div>
+            {FUNDS.map(f=>(
+              <div key={f.key} style={{display:"flex",gap:"10px",alignItems:"center",background:"rgba(255,255,255,0.02)",border:`1px solid ${f.color}15`,borderRadius:"12px",padding:"11px",marginBottom:"8px"}}>
+                <span style={{fontSize:"20px"}}>{f.icon}</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:"12px",fontWeight:600}}>{f.label} <span style={{color:f.color,fontFamily:"'Syne',sans-serif",fontWeight:700}}>{alloc[f.key]}%</span></div>
+                  <div style={{fontSize:"11px",color:"#475569"}}>{f.desc}</div>
+                </div>
+                <Bar pct={alloc[f.key]} color={f.color}/>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* BOTTOM NAV */}
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:"430px",background:"rgba(7,11,18,0.97)",borderTop:"1px solid rgba(255,255,255,0.05)",backdropFilter:"blur(20px)",display:"flex",zIndex:100}}>
+        {tabs.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"11px 0 14px",border:"none",background:"transparent",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:"2px"}}>
+            <div style={{fontSize:"17px",opacity:tab===t.id?1:0.3,transition:"opacity 0.2s"}}>{t.icon}</div>
+            <div style={{fontSize:"9px",fontWeight:600,fontFamily:"'DM Sans',sans-serif",color:tab===t.id?"#fbbf24":"#475569",letterSpacing:"0.3px"}}>{t.label}</div>
+            {tab===t.id && <div style={{width:"4px",height:"4px",borderRadius:"50%",background:"#fbbf24"}}/>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
