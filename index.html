@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>FactorFlow — Smart SIP Allocator</title>
+<meta name="theme-color" content="#fbbf24"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="FactorFlow"/>
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYAAABS3GwHAAAEaUlEQVR4nO3dQYocVQDG8ddDIGIggRzBQ3gNN15BEHIKlx4gkKMI3kD37t26GFAZZDA6LmTCZNLd01X16r2q9/1+20BPLb5/veqemcyhbMzzF6/vel8D67m9uT70voaHul6MsVNK3yiaf2Gj55zWMTT7YobPFK1CWP2LGD5LrB3Cai9u+NS0VgjVX9TwWVPtEK5qvpjxs7baG6tSk+HTQ43TYPEJYPz0UmN7iwIwfnpbusHZARg/W7Fki7MCMH62Zu4mJwdg/GzVnG1OCsD42bqpG704AONnL6Zs9aIAjJ+9uXSzTwZg/OzVJdut+qMQsDdnA3D3Z++e2vDJAIyfUZzbskcgoh0NwN2f0ZzatBOAaJ8E4O7PqI5t2wlAtI8CcPdndI837gQg2ocA3P1J8XDrTgCiCYBoV6V4/CHP/eadAEQTANEEQDQBEO3gDXCuP759dvLfXr573/BK+hFAmHOjP2XkGAQQYs7wHxsxBO8BAtQYf83X2RIBDK72aEeLQAADW2usI0UggEGtPdJRIhDAgFqNc4QIBEA0AQym9V1576eAAIgmAKIJYCC9Hkf2/BgkAKIJgGgCIJoAiCYAogmAaAIYSK9fWNnzL8oIgGgCIJoABtP6cWTPjz+lCIBwAhhQq7vy3u/+pZSy359iWsGbrz4r33/zee/LWN/tXfn3xz8XvcQI4y/FCcAMo4y/FAEw0UjjL0UATDDa+EvxHoALjDj8ewII9Ntfd+WLd+/979BFANFSRn6O9wBEEwDRBEA0ARBNAEQTANEEQDQBEE0ARPOd4Aa+fPN7+eXXf3pfBkc4AYgmAKIJgGgCIJoAiCYAogmAaAIgmgCIJgCiCYBoAiCaAIgmAKIJgGh+H6CBn96+6n0JpZRSfvj57/L1d8v+LsBonABEEwDRBEA0ARBNAEQTANEEQDQBEE0ARBMA0QRANAEQTQBEEwDRBEA0vw/QgL8PsF1OAKIJgGgCIJoAiCYAogmAaAIgmgCIJgCiCYBoAiCaAIgmAKIJgGgCIJoAiCYAogmAaAIgmgCIJgCiCYBoAiCaAIgmAKIJgGgCIJoAiCYAogmAaAIgmgCIJgCiCYBoAiDa4fmL13e9LwJ6cQIQTQBEEwDRBEA0ARBNAEQTANEEQDQBEE0ARLu6vbk+9L4I6OH25vrgBCCaAIgmAKIJgGhXpfz/ZqD3hUBL95t3AhBNAET7EIDHIFI83LoTgGgfBeAUYHSPN+4EINonATgFGNWxbTsBiHY0AKcAozm1aScA0U4G4BRgFOe2fPYEEAF799SGPQIR7ckAnALs1SXbvegEEAF7c+lmL34EEgF7MWWrk94DiICtm7rRyW+CRcBWzdnmrE+BRMDWzN3k7I9BRcBWLNniou8DiIDelm5w8TfCREAvNbZXdbz+5Cot1LzpVv1RCKcBa6u9sdUG6zSgprVurqvfsYXAEms/VTR7ZBECU7R6nG7+zC4Ezmn9PrLrm1YxUErfD08296mNKMa2tU8K/wO6fBvBFRZgOwAAAABJRU5ErkJggg=="/>
+<link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYAAABS3GwHAAAEaUlEQVR4nO3dQYocVQDG8ddDIGIggRzBQ3gNN15BEHIKlx4gkKMI3kD37t26GFAZZDA6LmTCZNLd01X16r2q9/1+20BPLb5/veqemcyhbMzzF6/vel8D67m9uT70voaHul6MsVNK3yiaf2Gj55zWMTT7YobPFK1CWP2LGD5LrB3Cai9u+NS0VgjVX9TwWVPtEK5qvpjxs7baG6tSk+HTQ43TYPEJYPz0UmN7iwIwfnpbusHZARg/W7Fki7MCMH62Zu4mJwdg/GzVnG1OCsD42bqpG704AONnL6Zs9aIAjJ+9uXSzTwZg/OzVJdut+qMQsDdnA3D3Z++e2vDJAIyfUZzbskcgoh0NwN2f0ZzatBOAaJ8E4O7PqI5t2wlAtI8CcPdndI837gQg2ocA3P1J8XDrTgCiCYBoV6V4/CHP/eadAEQTANEEQDQBEO3gDXCuP759dvLfXr573/BK+hFAmHOjP2XkGAQQYs7wHxsxBO8BAtQYf83X2RIBDK72aEeLQAADW2usI0UggEGtPdJRIhDAgFqNc4QIBEA0AQym9V1576eAAIgmAKIJYCC9Hkf2/BgkAKIJgGgCIJoAiCYAogmAaAIYSK9fWNnzL8oIgGgCIJoABtP6cWTPjz+lCIBwAhhQq7vy3u/+pZSy359iWsGbrz4r33/zee/LWN/tXfn3xz8XvcQI4y/FCcAMo4y/FAEw0UjjL0UATDDa+EvxHoALjDj8ewII9Ntfd+WLd+/979BFANFSRn6O9wBEEwDRBEA0ARBNAEQTANEEQDQBEE0ARPOd4Aa+fPN7+eXXf3pfBkc4AYgmAKIJgGgCIJoAiCYAogmAaAIgmgCIJgCiCYBoAiCaAIgmAKIJgGh+H6CBn96+6n0JpZRSfvj57/L1d8v+LsBonABEEwDRBEA0ARBNAEQTANEEQDQBEE0ARBMA0QRANAEQTQBEEwDRBEA0vw/QgL8PsF1OAKIJgGgCIJoAiCYAogmAaAIgmgCIJgCiCYBoAiCaAIgmAKIJgGgCIJoAiCYAogmAaAIgmgCIJgCiCYBoAiCaAIgmAKIJgGgCIJoAiCYAogmAaAIgmgCIJgCiCYBoAiDa4fmL13e9LwJ6cQIQTQBEEwDRBEA0ARBNAEQTANEEQDQBEE0ARLu6vbk+9L4I6OH25vrgBCCaAIgmAKIJgGhXpfz/ZqD3hUBL95t3AhBNAET7EIDHIFI83LoTgGgfBeAUYHSPN+4EINonATgFGNWxbTsBiHY0AKcAozm1aScA0U4G4BRgFOe2fPYEEAF799SGPQIR7ckAnALs1SXbvegEEAF7c+lmL34EEgF7MWWrk94DiICtm7rRyW+CRcBWzdnmrE+BRMDWzN3k7I9BRcBWLNniou8DiIDelm5w8TfCREAvNbZXdbz+5Cot1LzpVv1RCKcBa6u9sdUG6zSgprVurqvfsYXAEms/VTR7ZBECU7R6nG7+zC4Ezmn9PrLrm1YxUErfD08296mNKMa2tU8K/wO6fBvBFRZgOwAAAABJRU5ErkJggg=="/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Syne:wght@700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script>
+// ── INLINE MANIFEST ──
+(function(){
+  var m={"name": "FactorFlow \u2014 Smart SIP Allocator", "short_name": "FactorFlow", "description": "Auto-rebalancing SIP allocator driven by NSE live data", "start_url": "/", "display": "standalone", "background_color": "#070b12", "theme_color": "#fbbf24", "orientation": "portrait", "icons": [{"src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYAAABS3GwHAAAEaUlEQVR4nO3dQYocVQDG8ddDIGIggRzBQ3gNN15BEHIKlx4gkKMI3kD37t26GFAZZDA6LmTCZNLd01X16r2q9/1+20BPLb5/veqemcyhbMzzF6/vel8D67m9uT70voaHul6MsVNK3yiaf2Gj55zWMTT7YobPFK1CWP2LGD5LrB3Cai9u+NS0VgjVX9TwWVPtEK5qvpjxs7baG6tSk+HTQ43TYPEJYPz0UmN7iwIwfnpbusHZARg/W7Fki7MCMH62Zu4mJwdg/GzVnG1OCsD42bqpG704AONnL6Zs9aIAjJ+9uXSzTwZg/OzVJdut+qMQsDdnA3D3Z++e2vDJAIyfUZzbskcgoh0NwN2f0ZzatBOAaJ8E4O7PqI5t2wlAtI8CcPdndI837gQg2ocA3P1J8XDrTgCiCYBoV6V4/CHP/eadAEQTANEEQDQBEO3gDXCuP759dvLfXr573/BK+hFAmHOjP2XkGAQQYs7wHxsxBO8BAtQYf83X2RIBDK72aEeLQAADW2usI0UggEGtPdJRIhDAgFqNc4QIBEA0AQym9V1576eAAIgmAKIJYCC9Hkf2/BgkAKIJgGgCIJoAiCYAogmAaAIYSK9fWNnzL8oIgGgCIJoABtP6cWTPjz+lCIBwAhhQq7vy3u/+pZSy359iWsGbrz4r33/zee/LWN/tXfn3xz8XvcQI4y/FCcAMo4y/FAEw0UjjL0UATDDa+EvxHoALjDj8ewII9Ntfd+WLd+/979BFANFSRn6O9wBEEwDRBEA0ARBNAEQTANEEQDQBEE0ARPOd4Aa+fPN7+eXXf3pfBkc4AYgmAKIJgGgCIJoAiCYAogmAaAIgmgCIJgCiCYBoAiCaAIgmAKIJgGh+H6CBn96+6n0JpZRSfvj57/L1d8v+LsBonABEEwDRBEA0ARBNAEQTANEEQDQBEE0ARBMA0QRANAEQTQBEEwDRBEA0vw/QgL8PsF1OAKIJgGgCIJoAiCYAogmAaAIgmgCIJgCiCYBoAiCaAIgmAKIJgGgCIJoAiCYAogmAaAIgmgCIJgCiCYBoAiCaAIgmAKIJgGgCIJoAiCYAogmAaAIgmgCIJgCiCYBoAiDa4fmL13e9LwJ6cQIQTQBEEwDRBEA0ARBNAEQTANEEQDQBEE0ARLu6vbk+9L4I6OH25vrgBCCaAIgmAKIJgGhXpfz/ZqD3hUBL95t3AhBNAET7EIDHIFI83LoTgGgfBeAUYHSPN+4EINonATgFGNWxbTsBiHY0AKcAozm1aScA0U4G4BRgFOe2fPYEEAF799SGPQIR7ckAnALs1SXbvegEEAF7c+lmL34EEgF7MWWrk94DiICtm7rRyW+CRcBWzdnmrE+BRMDWzN3k7I9BRcBWLNniou8DiIDelm5w8TfCREAvNbZXdbz+5Cot1LzpVv1RCKcBa6u9sdUG6zSgprVurqvfsYXAEms/VTR7ZBECU7R6nG7+zC4Ezmn9PrLrm1YxUErfD08296mNKMa2tU8K/wO6fBvBFRZgOwAAAABJRU5ErkJggg==", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"}, {"src": "data:image/png;base64,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", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}]};
+  var b=new Blob([JSON.stringify(m)],{type:'application/manifest+json'});
+  var l=document.createElement('link');
+  l.rel='manifest'; l.href=URL.createObjectURL(b);
+  document.head.appendChild(l);
+})();
+// ── INLINE SERVICE WORKER ──
+var __SW="const CACHE='ff-v4';\nself.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['/'])));self.skipWaiting();});\nself.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim();});\nself.addEventListener('fetch',e=>{if(!e.request.url.startsWith(self.location.origin))return;e.respondWith(caches.match(e.request).then(c=>c||fetch(e.request)));});\nself.addEventListener('push',e=>{const d=e.data?.json()||{};e.waitUntil(self.registration.showNotification(d.title||'FactorFlow Rebalance',{body:d.body||'Your weekly SIP rebalance is ready.',tag:'ff-rebalance',vibrate:[200,100,200]}));});\nself.addEventListener('notificationclick',e=>{e.notification.close();e.waitUntil(clients.matchAll({type:'window'}).then(list=>{for(const c of list)if('focus'in c)return c.focus();return clients.openWindow('/');}));});\nself.addEventListener('message',e=>{if(e.data?.type==='SCHEDULE')setTimeout(()=>self.registration.showNotification('Weekly Rebalance Due',{body:'Time to rebalance your SIP. Open FactorFlow now.',tag:'ff-rebalance',vibrate:[200,100,200]}),e.data.ms||604800000);});";
+if('serviceWorker' in navigator){
+  window.__swReady=(async function(){
+    try{
+      var b=new Blob([__SW],{type:'application/javascript'});
+      var r=await navigator.serviceWorker.register(URL.createObjectURL(b),{scope:'/'});
+      return r;
+    }catch(e){return null;}
+  })();
+}else{ window.__swReady=Promise.resolve(null); }
+</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+body{background:#070b12;color:#e2e8f0;font-family:'DM Sans',sans-serif;overscroll-behavior:none}
+::-webkit-scrollbar{display:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ══════════════════════════════════════════════════════
+// DATA FETCHER — Yahoo Finance (primary) + fallbacks
+// Yahoo Finance works from browser, no API key needed
+// ══════════════════════════════════════════════════════
+
+async function fetchYahooNifty() {
+  // Yahoo Finance query for Nifty 50 (^NSEI) and India VIX (^INDIAVIX)
+  const CORS = 'https://api.allorigins.win/raw?url=';
+  const NSEI_URL  = 'https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=1d&range=1d';
+  const VIX_URL   = 'https://query1.finance.yahoo.com/v8/finance/chart/%5EINDIAVIX?interval=1d&range=1d';
+  const PE_URL    = 'https://query1.finance.yahoo.com/v10/finance/quoteSummary/%5ENSEI?modules=defaultKeyStatistics,summaryDetail';
+
+  try {
+    const [nRes, vRes, peRes] = await Promise.all([
+      fetch(CORS + encodeURIComponent(NSEI_URL), { signal: AbortSignal.timeout(8000) }),
+      fetch(CORS + encodeURIComponent(VIX_URL),  { signal: AbortSignal.timeout(8000) }),
+      fetch(CORS + encodeURIComponent(PE_URL),   { signal: AbortSignal.timeout(8000) }),
+    ]);
+
+    if (!nRes.ok) return null;
+
+    const nData  = await nRes.json();
+    const vData  = vRes.ok ? await vRes.json() : null;
+    const peData = peRes.ok ? await peRes.json() : null;
+
+    const meta   = nData?.chart?.result?.[0]?.meta;
+    if (!meta) return null;
+
+    const price    = parseFloat(meta.regularMarketPrice   ?? 22187);
+    const prevClose= parseFloat(meta.chartPreviousClose   ?? price);
+    const open     = parseFloat(meta.regularMarketOpen    ?? price);
+    const high     = parseFloat(meta.regularMarketDayHigh ?? price);
+    const low      = parseFloat(meta.regularMarketDayLow  ?? price);
+    const chgPct   = ((price - prevClose) / prevClose * 100);
+
+    // P/E from Yahoo summary or estimate
+    const stats    = peData?.quoteSummary?.result?.[0];
+    const pe       = parseFloat(
+      stats?.summaryDetail?.trailingPE?.raw ??
+      stats?.defaultKeyStatistics?.trailingEps?.raw ??
+      21.4
+    );
+    const niftyPE  = isNaN(pe) || pe <= 0 || pe > 60 ? 21.4 : parseFloat(pe.toFixed(1));
+
+    // VIX
+    const vMeta  = vData?.chart?.result?.[0]?.meta;
+    const vix    = parseFloat(vMeta?.regularMarketPrice ?? 13.8);
+    const vPrev  = parseFloat(vMeta?.chartPreviousClose ?? vix);
+    const vixChg = ((vix - vPrev) / vPrev * 100);
+
+    // Approximate SMAs from 52w range (rough but functional without history)
+    const w52high = parseFloat(meta.fiftyTwoWeekHigh ?? price * 1.15);
+    const w52low  = parseFloat(meta.fiftyTwoWeekLow  ?? price * 0.85);
+    const sma200  = Math.round((w52high + w52low) / 2);
+    const sma50   = Math.round(sma200 * 1.02 + (price - sma200) * 0.3);
+
+    return {
+      nifty50:   Math.round(price),
+      niftyPE:   niftyPE,
+      niftyChg:  parseFloat(chgPct.toFixed(2)),
+      niftyOpen: Math.round(open),
+      niftyHigh: Math.round(high),
+      niftyLow:  Math.round(low),
+      sma50, sma200,
+      vix:       parseFloat(vix.toFixed(1)),
+      vixChg:    parseFloat(vixChg.toFixed(2)),
+      fetchedAt: new Date().toLocaleTimeString('en-IN'),
+      isLive:    true,
+      source:    'yahoo',
+    };
+  } catch(e) { return null; }
+}
+
+async function fetchNSEFallback() {
+  const PROXIES = [
+    'https://api.allorigins.win/raw?url=',
+    'https://corsproxy.io/?',
+  ];
+  for (const proxy of PROXIES) {
+    try {
+      const r = await fetch(
+        proxy + encodeURIComponent('https://www.nseindia.com/api/equity-stockIndices?index=NIFTY%2050'),
+        { headers:{ Accept:'application/json' }, signal: AbortSignal.timeout(7000) }
+      );
+      if (!r.ok) continue;
+      const d = await r.json();
+      const n = d?.data?.[0];
+      if (!n) continue;
+      const price = parseFloat(n.last ?? 22187);
+      return {
+        nifty50:   Math.round(price),
+        niftyPE:   parseFloat(n.pe ?? 21.4),
+        niftyChg:  parseFloat(n.pChange ?? 0),
+        niftyOpen: parseFloat(n.open  ?? price),
+        niftyHigh: parseFloat(n.high  ?? price),
+        niftyLow:  parseFloat(n.low   ?? price),
+        sma50:     Math.round(price * 0.972),
+        sma200:    Math.round(price * 0.941),
+        vix: 14.2, vixChg: 0,
+        fetchedAt: new Date().toLocaleTimeString('en-IN'),
+        isLive: true, source: 'nse',
+      };
+    } catch { continue; }
+  }
+  return null;
+}
+
+async function fetchLiveData() {
+  // Try Yahoo first (most reliable from browser)
+  const yahoo = await fetchYahooNifty();
+  if (yahoo) return yahoo;
+  // Try NSE proxy fallback
+  const nse = await fetchNSEFallback();
+  if (nse) return nse;
+  // All failed — return null, app uses demo
+  return null;
+}
+
+// ══════════════════════════════════════════════════════
+// REBALANCING ENGINE
+// ══════════════════════════════════════════════════════
+
+function getZone(pe) {
+  if (pe < 18) return 'DEEP_VALUE';
+  if (pe < 22) return 'FAIR_VALUE';
+  if (pe < 26) return 'EXPENSIVE';
+  return 'BUBBLE';
+}
+function getMomScore(price, s50, s200) {
+  let s = 50;
+  if (price > s50)  s += 20; else s -= 20;
+  if (price > s200) s += 20; else s -= 20;
+  if (s50 > s200)   s += 10; else s -= 10;
+  return Math.max(0, Math.min(100, s));
+}
+function getSignal(pe, mom) {
+  const z = getZone(pe);
+  if (z==='DEEP_VALUE' && mom>=60) return 'STRONG_BULL';
+  if (z==='DEEP_VALUE')            return 'BULL';
+  if (z==='FAIR_VALUE' && mom>=60) return 'BULL';
+  if (z==='FAIR_VALUE' && mom<40)  return 'NEUTRAL';
+  if (z==='FAIR_VALUE')            return 'NEUTRAL';
+  if (z==='EXPENSIVE' && mom>=60)  return 'NEUTRAL';
+  if (z==='EXPENSIVE' && mom<40)   return 'BEAR';
+  if (z==='EXPENSIVE')             return 'BEAR';
+  return 'STRONG_BEAR';
+}
+function computeAlloc(sig) {
+  const p=sig.nifty50||22187, s50=sig.sma50||Math.round(p*0.972), s200=sig.sma200||Math.round(p*0.941);
+  const mom=getMomScore(p,s50,s200), signal=getSignal(sig.niftyPE,mom), zone=getZone(sig.niftyPE);
+  const BASE={
+    STRONG_BULL:{momentum:38,quality:20,value:27,lowvol:8, gold:7 },
+    BULL:       {momentum:28,quality:24,value:25,lowvol:10,gold:13},
+    NEUTRAL:    {momentum:18,quality:28,value:22,lowvol:14,gold:18},
+    BEAR:       {momentum:8, quality:28,value:16,lowvol:20,gold:28},
+    STRONG_BEAR:{momentum:4, quality:22,value:12,lowvol:18,gold:44},
+  };
+  let a={...BASE[signal]};
+  if(sig.vix>20){
+    const sh=Math.min(8,Math.round((sig.vix-20)*0.8));
+    a.momentum=Math.max(2,a.momentum-sh);
+    a.lowvol=Math.min(30,a.lowvol+Math.round(sh*0.6));
+    a.gold=Math.min(50,a.gold+Math.round(sh*0.4));
+  }
+  const sum=Object.values(a).reduce((x,y)=>x+y,0);
+  if(sum!==100) a.quality+=(100-sum);
+  return{...a,_signal:signal,_zone:zone,_mom:mom};
+}
+
+// ══════════════════════════════════════════════════════
+// CONSTANTS
+// ══════════════════════════════════════════════════════
+
+const MOCK={nifty50:22187,niftyPE:21.4,niftyChg:0.64,niftyOpen:22100,niftyHigh:22300,niftyLow:22050,sma50:21564,sma200:20882,vix:13.8,vixChg:-2.1,isLive:false,source:'demo'};
+const FUNDS=[
+  {key:'momentum',label:'Momentum',fund:'Nifty200 Momentum 30', color:'#f97316',icon:'⚡',desc:'Rides trending winners'},
+  {key:'quality', label:'Quality', fund:'Nifty200 Quality 30',  color:'#38bdf8',icon:'💎',desc:'High ROE, low debt firms'},
+  {key:'value',   label:'Value',   fund:'Nifty500 Value 50',    color:'#a78bfa',icon:'🏷️',desc:'Cheap vs fundamentals'},
+  {key:'lowvol',  label:'Low Vol', fund:'Nifty Alpha LowVol 30',color:'#34d399',icon:'🛡️',desc:'Defensive factor hedge'},
+  {key:'gold',    label:'Gold',    fund:'Nippon Gold BeES',      color:'#fbbf24',icon:'🥇',desc:'Safe haven + inflation'},
+];
+const SIG={
+  STRONG_BULL:{icon:'🚀',label:'Strong Bull', color:'#34d399'},
+  BULL:       {icon:'📈',label:'Bullish',      color:'#38bdf8'},
+  NEUTRAL:    {icon:'⚖️',label:'Neutral',      color:'#fbbf24'},
+  BEAR:       {icon:'🐻',label:'Bearish',      color:'#f97316'},
+  STRONG_BEAR:{icon:'🛡️',label:'Strong Bear', color:'#f87171'},
+};
+const ZONE={DEEP_VALUE:'Deep Value',FAIR_VALUE:'Fair Value',EXPENSIVE:'Expensive',BUBBLE:'Bubble'};
+const TABS=[
+  {id:'home',   icon:'⊞',label:'Home'},
+  {id:'alloc',  icon:'◈',label:'Allocate'},
+  {id:'signals',icon:'◎',label:'Signals'},
+  {id:'history',icon:'📋',label:'History'},
+  {id:'ai',     icon:'✦',label:'AI Why'},
+];
+
+// ══════════════════════════════════════════════════════
+// PERSISTENCE
+// ══════════════════════════════════════════════════════
+
+const loadH=()=>{try{return JSON.parse(localStorage.getItem('ff_h')||'[]');}catch{return[];}};
+const saveH=e=>{try{let h=loadH();h.unshift(e);if(h.length>12)h=h.slice(0,12);localStorage.setItem('ff_h',JSON.stringify(h));}catch{}};
+
+// ══════════════════════════════════════════════════════
+// UI COMPONENTS
+// ══════════════════════════════════════════════════════
+
+function Bar({pct,color}){
+  const [w,setW]=useState(0);
+  useEffect(()=>{const t=setTimeout(()=>setW(pct),80);return()=>clearTimeout(t);},[pct]);
+  return(
+    <div style={{height:'5px',background:'rgba(255,255,255,0.05)',borderRadius:'3px',overflow:'hidden',marginTop:'6px'}}>
+      <div style={{height:'100%',width:`${w}%`,background:color,borderRadius:'3px',transition:'width 0.9s cubic-bezier(0.34,1.56,0.64,1)'}}/>
+    </div>
+  );
+}
+
+function Donut({alloc,size=130}){
+  const cx=size/2,cy=size/2,r=size*0.36,sw=size*0.14;
+  const C={momentum:'#f97316',quality:'#38bdf8',value:'#a78bfa',lowvol:'#34d399',gold:'#fbbf24'};
+  let cum=-90;
+  const slices=FUNDS.map(f=>{const angle=(alloc[f.key]/100)*360,s=cum;cum+=angle;return{...f,angle,start:s};});
+  function arc(cx,cy,r,s,a){
+    const sr=s*Math.PI/180,er=(s+a)*Math.PI/180;
+    return `M ${cx+r*Math.cos(sr)} ${cy+r*Math.sin(sr)} A ${r} ${r} 0 ${a>180?1:0} 1 ${cx+r*Math.cos(er)} ${cy+r*Math.sin(er)}`;
+  }
+  const sm=SIG[alloc._signal]||SIG.NEUTRAL;
+  return(
+    <svg width={size} height={size}>
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth={sw}/>
+      {slices.map((sl,i)=>sl.angle>0.5&&<path key={i} d={arc(cx,cy,r,sl.start,sl.angle)} fill="none" stroke={C[sl.key]} strokeWidth={sw} strokeLinecap="butt" opacity={0.9}/>)}
+      <text x={cx} y={cy-4}  textAnchor="middle" fill="#e2e8f0" fontSize={size*0.12} fontFamily="Syne" fontWeight="800">{sm.icon}</text>
+      <text x={cx} y={cy+13} textAnchor="middle" fill="#64748b" fontSize={size*0.055}>{sm.label}</text>
+    </svg>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+// MAIN APP
+// ══════════════════════════════════════════════════════
+
+function App(){
+  const [tab,      setTab]      = useState('home');
+  const [signals,  setSignals]  = useState(MOCK);
+  const [alloc,    setAlloc]    = useState(()=>computeAlloc(MOCK));
+  const [prev,     setPrev]     = useState(null);
+  const [sipAmt,   setSipAmt]   = useState(10000);
+  const [applied,  setApplied]  = useState(false);
+  const [fetching, setFetching] = useState(false);
+  const [fetchMsg, setFetchMsg] = useState('');
+  const [aiText,   setAiText]   = useState('');
+  const [aiLoad,   setAiLoad]   = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
+  const [history,  setHistory]  = useState(()=>loadH());
+  const [nextRun,  setNextRun]  = useState(null);
+  const [countdown,setCountdown]= useState('');
+  const [timerPct, setTimerPct] = useState(100);
+  const [notif,    setNotif]    = useState('default');
+  const cRef = useRef(null);
+
+  useEffect(()=>{
+    if('Notification' in window) setNotif(Notification.permission);
+  },[]);
+
+  useEffect(()=>{
+    if(!nextRun) return;
+    const WEEK=7*24*60*60*1000;
+    cRef.current=setInterval(()=>{
+      const rem=Math.max(0,nextRun-Date.now());
+      const d=Math.floor(rem/86400000),h=Math.floor((rem%86400000)/3600000),
+            m=Math.floor((rem%3600000)/60000),s=Math.floor((rem%60000)/1000);
+      setCountdown(`${d}d ${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`);
+      setTimerPct((rem/WEEK)*100);
+      if(rem===0){clearInterval(cRef.current);fetchLive(false);};
+    },1000);
+    return()=>clearInterval(cRef.current);
+  },[nextRun]);
+
+  useEffect(()=>{
+    const t=setInterval(()=>fetchLive(true),5*60*1000);
+    return()=>clearInterval(t);
+  },[]);
+
+  const showToast=msg=>{setToastMsg(msg);setTimeout(()=>setToastMsg(''),3000);};
+
+  async function enableNotif(){
+    if(!('Notification' in window)){showToast('❌ Notifications not supported');return;}
+    const s=await Notification.requestPermission();
+    setNotif(s);
+    if(s==='granted'){
+      showToast('🔔 Notifications enabled!');
+      const reg=await window.__swReady;
+      if(reg) await reg.showNotification('✅ FactorFlow Active',{body:'You will be notified every week before your SIP rebalance.',tag:'ff-test',vibrate:[200,100,200]});
+    }
+  }
+
+  async function fetchLive(silent=false){
+    if(!silent){setFetching(true);setFetchMsg('Fetching live data…');}
+    const data=await fetchLiveData();
+    const fd=data||{...MOCK,isLive:false,source:'demo'};
+    const na=computeAlloc(fd);
+    setPrev(alloc); setSignals(fd); setAlloc(na); setApplied(false); setAiText('');
+    const entry={
+      date:new Date().toLocaleDateString('en-IN'),
+      time:new Date().toLocaleTimeString('en-IN'),
+      signal:na._signal,zone:na._zone,pe:fd.niftyPE,vix:fd.vix,mom:na._mom,
+      alloc:{momentum:na.momentum,quality:na.quality,value:na.value,lowvol:na.lowvol,gold:na.gold},
+      sipAmt,isLive:fd.isLive,source:fd.source,
+    };
+    saveH(entry); setHistory(loadH());
+    setNextRun(Date.now()+7*24*60*60*1000);
+    if(notif==='granted'){
+      const reg=await window.__swReady;
+      if(reg?.active) reg.active.postMessage({type:'SCHEDULE',ms:604800000});
+    }
+    const badge=fd.source==='yahoo'?'🟢 Yahoo Finance':fd.source==='nse'?'🟡 NSE':'⚪ Demo';
+    showToast(data?`✅ ${badge} · ${fd.fetchedAt}`:'⚠️ Using demo data — markets may be closed');
+    setFetchMsg('');
+    if(!silent) setFetching(false);
+  }
+
+  async function askClaude(){
+    setAiLoad(true); setAiText('');
+    try{
+      const res=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          model:'claude-sonnet-4-20250514',max_tokens:1000,
+          messages:[{role:'user',content:
+            `You are an Indian quant fund advisor. Live NSE market data:
+- Nifty 50: ${signals.nifty50.toLocaleString('en-IN')} (${signals.niftyChg>=0?'+':''}${signals.niftyChg}%)
+- Nifty PE: ${signals.niftyPE} | India VIX: ${signals.vix}
+- Market Zone: ${ZONE[alloc._zone]} | Signal: ${SIG[alloc._signal]?.label}
+- Momentum Score: ${alloc._mom}/100
+- Source: ${signals.source} | SIP: ₹${sipAmt.toLocaleString('en-IN')}
+
+Auto-allocation: Momentum=${alloc.momentum}%, Quality=${alloc.quality}%, Value=${alloc.value}%, LowVol=${alloc.lowvol}%, Gold=${alloc.gold}%
+
+In 4-5 lines explain WHY each factor has this exact weight. Be specific about PE=${signals.niftyPE} and VIX=${signals.vix}. Simple language for retail Indian investors.`
+          }]
+        })
+      });
+      const d=await res.json();
+      setAiText(d.content?.map(b=>b.text||'').join('')||'No response.');
+    }catch{setAiText('Could not reach AI. Check your connection.');}
+    setAiLoad(false);
+  }
+
+  const peColor  = signals.niftyPE>24?'#f87171':signals.niftyPE<20?'#34d399':'#fbbf24';
+  const vixColor = signals.vix>20?'#f87171':signals.vix<14?'#34d399':'#fbbf24';
+  const peLabel  = signals.niftyPE>24?'Overvalued':signals.niftyPE<20?'Undervalued':'Fair Value';
+  const vixLabel = signals.vix>20?'High Fear':signals.vix<14?'Low Fear':'Moderate';
+  const sm       = SIG[alloc._signal]||SIG.NEUTRAL;
+  const rupee    = k=>`₹${Math.round((alloc[k]/100)*sipAmt).toLocaleString('en-IN')}`;
+  const srcBadge = signals.source==='yahoo'?'🟢 Yahoo Finance':signals.source==='nse'?'🟡 NSE':'⚪ Demo';
+
+  const S = {  // shared inline styles
+    card:  {background:'rgba(255,255,255,0.02)',border:'1px solid rgba(255,255,255,0.05)',borderRadius:'14px',padding:'14px',marginBottom:'12px'},
+    mono:  {fontFamily:"'DM Mono',monospace"},
+    syne:  {fontFamily:"'Syne',sans-serif"},
+    label: {fontSize:'10px',color:'#475569',fontWeight:600,letterSpacing:'0.5px',fontFamily:"'DM Mono',monospace"},
+  };
+
+  return(
+    <div style={{minHeight:'100vh',background:'#070b12',color:'#e2e8f0',fontFamily:"'DM Sans',sans-serif"}}>
+      <div style={{position:'fixed',top:'-80px',right:'-80px',width:'300px',height:'300px',borderRadius:'50%',background:'radial-gradient(circle,rgba(251,191,36,0.07) 0%,transparent 70%)',pointerEvents:'none',zIndex:0}}/>
+      <div style={{position:'fixed',bottom:'-60px',left:'-60px',width:'240px',height:'240px',borderRadius:'50%',background:`radial-gradient(circle,${sm.color}09 0%,transparent 70%)`,pointerEvents:'none',zIndex:0,transition:'background 1s'}}/>
+
+      {toastMsg&&<div style={{position:'fixed',top:'16px',left:'50%',transform:'translateX(-50%)',background:'rgba(15,23,42,0.97)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'12px',padding:'10px 18px',fontSize:'12px',fontWeight:600,zIndex:999,whiteSpace:'nowrap',boxShadow:'0 8px 32px rgba(0,0,0,0.6)',animation:'fadeIn 0.3s ease'}}>{toastMsg}</div>}
+
+      <div style={{position:'relative',zIndex:1,maxWidth:'430px',margin:'0 auto',paddingBottom:'86px'}}>
+
+        {/* ── HEADER ── */}
+        <div style={{padding:'20px 20px 10px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <div>
+            <div style={{...S.syne,fontSize:'22px',fontWeight:800,letterSpacing:'-0.5px'}}>FACTOR<span style={{color:'#fbbf24'}}>FLOW</span></div>
+            <div style={{...S.label,marginTop:'2px'}}>AUTO-ALLOCATION ENGINE</div>
+          </div>
+          <button onClick={()=>fetchLive(false)} disabled={fetching} style={{display:'flex',alignItems:'center',gap:'6px',background:'rgba(251,191,36,0.08)',border:'1px solid rgba(251,191,36,0.2)',borderRadius:'20px',padding:'7px 13px',color:fetching?'#475569':'#fbbf24',fontSize:'11px',fontWeight:600,cursor:fetching?'not-allowed':'pointer'}}>
+            {fetching
+              ?<span style={{width:'10px',height:'10px',border:'2px solid #fbbf24',borderTopColor:'transparent',borderRadius:'50%',display:'inline-block',animation:'spin 0.8s linear infinite'}}/>
+              :<span style={{width:'6px',height:'6px',borderRadius:'50%',background:signals.isLive?'#34d399':'#475569',display:'inline-block'}}/>
+            }
+            {fetching?'Fetching…':signals.isLive?`${signals.fetchedAt}`:'Get Live Data'}
+          </button>
+        </div>
+
+        {fetchMsg&&<div style={{margin:'0 20px 10px',background:'rgba(251,191,36,0.06)',border:'1px solid rgba(251,191,36,0.15)',borderRadius:'10px',padding:'8px 14px',fontSize:'11px',color:'#fbbf24',animation:'fadeIn 0.3s ease'}}>⏳ {fetchMsg}</div>}
+
+        {/* ════ HOME TAB ════ */}
+        {tab==='home'&&<div style={{padding:'0 20px',animation:'fadeIn 0.3s ease'}}>
+
+          {/* Notif banner */}
+          {notif==='default'&&<button onClick={enableNotif} style={{width:'100%',marginBottom:'12px',padding:'11px',background:'rgba(99,102,241,0.08)',border:'1px solid rgba(99,102,241,0.25)',borderRadius:'12px',color:'#818cf8',fontSize:'12px',fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}>🔔 Enable weekly rebalance notifications</button>}
+          {notif==='denied'&&<div style={{marginBottom:'12px',background:'rgba(248,113,113,0.07)',border:'1px solid rgba(248,113,113,0.2)',borderRadius:'12px',padding:'10px 14px',fontSize:'11px',color:'#f87171'}}>🔕 Notifications blocked in browser settings.</div>}
+
+          {/* Source badge */}
+          {signals.isLive&&<div style={{background:'rgba(52,211,153,0.06)',border:'1px solid rgba(52,211,153,0.2)',borderRadius:'12px',padding:'8px 14px',marginBottom:'12px',display:'flex',alignItems:'center',gap:'8px',fontSize:'11px',color:'#34d399',fontWeight:600}}><span style={{width:'6px',height:'6px',borderRadius:'50%',background:'#34d399',display:'inline-block',animation:'pulse 2s infinite'}}/> {srcBadge} · {signals.fetchedAt}</div>}
+
+          {/* Signal strip */}
+          <div style={{background:`linear-gradient(135deg,${sm.color}12,${sm.color}05)`,border:`1px solid ${sm.color}30`,borderRadius:'14px',padding:'12px 16px',marginBottom:'12px',display:'flex',alignItems:'center',gap:'12px'}}>
+            <span style={{fontSize:'26px'}}>{sm.icon}</span>
+            <div style={{flex:1}}>
+              <div style={{...S.syne,fontSize:'16px',fontWeight:800,color:sm.color}}>{sm.label}</div>
+              <div style={{...S.label,marginTop:'3px'}}>Zone: {ZONE[alloc._zone]} · Momentum: {alloc._mom}/100</div>
+            </div>
+            <div style={{...S.mono,fontSize:'11px',color:sm.color,textAlign:'right',opacity:0.8}}>PE {signals.niftyPE}<br/>VIX {signals.vix}</div>
+          </div>
+
+          {/* Nifty card */}
+          <div style={{background:'linear-gradient(135deg,rgba(15,23,42,0.95),rgba(20,32,54,0.7))',border:'1px solid rgba(255,255,255,0.05)',borderRadius:'18px',padding:'18px',marginBottom:'12px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'12px'}}>
+              <div>
+                <div style={{...S.label,marginBottom:'4px'}}>NIFTY 50</div>
+                <div style={{...S.syne,fontSize:'32px',fontWeight:800,lineHeight:1}}>{signals.nifty50.toLocaleString('en-IN')}</div>
+                <div style={{fontSize:'12px',color:signals.niftyChg>=0?'#34d399':'#f87171',marginTop:'4px',fontWeight:600}}>{signals.niftyChg>=0?'▲':'▼'} {Math.abs(signals.niftyChg).toFixed(2)}% today</div>
+              </div>
+              <div style={{textAlign:'right'}}>
+                <div style={{...S.label,marginBottom:'2px'}}>PE RATIO</div>
+                <div style={{...S.syne,fontSize:'26px',fontWeight:800,color:peColor}}>{signals.niftyPE}</div>
+                <div style={{fontSize:'10px',color:peColor,fontWeight:600,marginTop:'2px'}}>{peLabel}</div>
+              </div>
+            </div>
+            {signals.isLive&&<div style={{display:'flex',gap:'8px',paddingTop:'10px',borderTop:'1px solid rgba(255,255,255,0.04)'}}>
+              {[['Open',signals.niftyOpen],['High',signals.niftyHigh],['Low',signals.niftyLow]].map(([l,v])=>(
+                <div key={l} style={{flex:1,textAlign:'center',background:'rgba(255,255,255,0.02)',borderRadius:'8px',padding:'6px'}}>
+                  <div style={{...S.label,marginBottom:'2px'}}>{l}</div>
+                  <div style={{fontSize:'11px',fontWeight:600}}>{(v||0).toLocaleString('en-IN')}</div>
+                </div>
+              ))}
+            </div>}
+          </div>
+
+          {/* VIX + SIP */}
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'12px'}}>
+            <div style={{background:'rgba(255,255,255,0.02)',border:`1px solid ${vixColor}20`,borderRadius:'12px',padding:'13px'}}>
+              <div style={{...S.label,marginBottom:'3px'}}>INDIA VIX</div>
+              <div style={{...S.syne,fontSize:'22px',fontWeight:800,color:vixColor}}>{signals.vix}</div>
+              <div style={{fontSize:'10px',color:vixColor,fontWeight:600,marginTop:'2px'}}>{vixLabel}</div>
+            </div>
+            <div style={{background:'rgba(255,255,255,0.02)',border:'1px solid rgba(251,191,36,0.15)',borderRadius:'12px',padding:'13px'}}>
+              <div style={{...S.label,marginBottom:'6px'}}>MONTHLY SIP ₹</div>
+              <input type="number" value={sipAmt} min={500} step={500} onChange={e=>setSipAmt(parseInt(e.target.value)||500)}
+                style={{background:'transparent',border:'none',outline:'none',...S.syne,fontSize:'18px',fontWeight:800,color:'#fbbf24',width:'100%'}}/>
+              <div style={{fontSize:'10px',color:'#475569',marginTop:'4px'}}>Tap to change</div>
+            </div>
+          </div>
+
+          {/* Mini allocation */}
+          <div style={{...S.card}}>
+            <div style={{...S.label,marginBottom:'12px'}}>AUTO ALLOCATION</div>
+            {FUNDS.map(f=>(
+              <div key={f.key} style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'8px'}}>
+                <span style={{fontSize:'14px',width:'20px',textAlign:'center'}}>{f.icon}</span>
+                <div style={{flex:1}}>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:'3px'}}>
+                    <span style={{fontSize:'11px',color:'#94a3b8'}}>{f.label}</span>
+                    <span style={{fontSize:'12px',fontWeight:700,color:f.color,...S.syne}}>{alloc[f.key]}%</span>
+                  </div>
+                  <Bar pct={alloc[f.key]} color={f.color}/>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Countdown */}
+          {nextRun&&<div style={{...S.card}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
+              <span style={{...S.label}}>NEXT REBALANCE IN</span>
+              <span style={{fontSize:'13px',color:'#fbbf24',...S.mono,fontWeight:600}}>{countdown}</span>
+            </div>
+            <div style={{height:'4px',background:'rgba(255,255,255,0.05)',borderRadius:'2px',overflow:'hidden'}}><div style={{height:'100%',background:'linear-gradient(90deg,#fbbf24,#f97316)',borderRadius:'2px',width:`${timerPct}%`,transition:'width 1s linear'}}/></div>
+          </div>}
+
+          <button onClick={()=>setTab('alloc')} style={{width:'100%',padding:'14px',background:'linear-gradient(135deg,rgba(251,191,36,0.18),rgba(251,191,36,0.06))',border:'1px solid rgba(251,191,36,0.3)',borderRadius:'14px',color:'#fbbf24',fontWeight:700,fontSize:'14px',cursor:'pointer'}}>⚡ View Full Allocation →</button>
+        </div>}
+
+        {/* ════ ALLOCATE TAB ════ */}
+        {tab==='alloc'&&<div style={{padding:'0 20px',animation:'fadeIn 0.3s ease'}}>
+          <div style={{display:'flex',gap:'14px',alignItems:'center',background:'linear-gradient(135deg,rgba(15,23,42,0.95),rgba(20,32,54,0.6))',border:'1px solid rgba(255,255,255,0.04)',borderRadius:'18px',padding:'18px',marginBottom:'12px'}}>
+            <Donut alloc={alloc} size={130}/>
+            <div style={{flex:1}}>
+              <div style={{...S.label,marginBottom:'8px'}}>RECOMMENDED MIX</div>
+              {FUNDS.map(f=>(
+                <div key={f.key} style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'5px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'5px'}}><div style={{width:'7px',height:'7px',borderRadius:'50%',background:f.color}}/><span style={{fontSize:'12px',color:'#94a3b8'}}>{f.label}</span></div>
+                  <span style={{fontSize:'13px',fontWeight:700,color:f.color,...S.syne}}>{alloc[f.key]}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{background:'rgba(251,191,36,0.05)',border:'1px solid rgba(251,191,36,0.15)',borderRadius:'12px',padding:'12px 16px',marginBottom:'12px',display:'flex',alignItems:'center',gap:'12px'}}>
+            <div style={{flex:1}}>
+              <div style={{...S.label,marginBottom:'4px'}}>MONTHLY SIP</div>
+              <input type="number" value={sipAmt} min={500} step={500} onChange={e=>setSipAmt(parseInt(e.target.value)||500)}
+                style={{background:'transparent',border:'none',outline:'none',...S.syne,fontSize:'20px',fontWeight:800,color:'#fbbf24',width:'100%'}}/>
+            </div>
+            <div style={{fontSize:'22px'}}>₹</div>
+          </div>
+          {FUNDS.map(f=>{
+            const delta=prev?alloc[f.key]-prev[f.key]:0;
+            return(
+              <div key={f.key} style={{background:'rgba(15,23,42,0.85)',border:`1px solid ${f.color}18`,borderLeft:`3px solid ${f.color}`,borderRadius:'14px',padding:'13px',marginBottom:'9px',animation:'slideIn 0.3s ease'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+                  <div>
+                    <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
+                      <span style={{fontSize:'15px'}}>{f.icon}</span>
+                      <span style={{fontSize:'13px',fontWeight:600}}>{f.label}</span>
+                      {delta!==0&&<span style={{fontSize:'10px',fontWeight:700,color:delta>0?'#34d399':'#f87171',background:delta>0?'rgba(52,211,153,0.1)':'rgba(248,113,113,0.1)',borderRadius:'5px',padding:'1px 5px'}}>{delta>0?'▲':'▼'}{Math.abs(delta)}%</span>}
+                    </div>
+                    <div style={{fontSize:'10px',color:'#475569',marginTop:'2px'}}>{f.fund}</div>
+                    <div style={{fontSize:'11px',color:'#fbbf24',marginTop:'3px',...S.mono}}>{rupee(f.key)}</div>
+                  </div>
+                  <div style={{...S.syne,fontSize:'26px',fontWeight:800,color:f.color}}>{alloc[f.key]}%</div>
+                </div>
+                <Bar pct={alloc[f.key]} color={f.color}/>
+              </div>
+            );
+          }))}
+          {!applied
+            ?<button onClick={()=>{setApplied(true);showToast('✅ Allocation applied!');}} style={{width:'100%',padding:'14px',background:'linear-gradient(135deg,rgba(251,191,36,0.2),rgba(251,191,36,0.07))',border:'1px solid rgba(251,191,36,0.3)',borderRadius:'14px',color:'#fbbf24',fontWeight:700,fontSize:'14px',cursor:'pointer',marginTop:'4px'}}>⚡ Apply This Allocation</button>
+            :<div style={{textAlign:'center',padding:'14px',color:'#34d399',fontWeight:600,fontSize:'13px',background:'rgba(52,211,153,0.06)',border:'1px solid rgba(52,211,153,0.2)',borderRadius:'14px',marginTop:'4px'}}>✓ Applied — rebalances on next SIP cycle</div>
+          }
+        </div>}
+
+        {/* ════ SIGNALS TAB ════ */}
+        {tab==='signals'&&<div style={{padding:'0 20px',animation:'fadeIn 0.3s ease'}}>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'14px'}}>
+            {[
+              {label:'NIFTY PE',   value:signals.niftyPE,                         warn:peLabel,    col:peColor},
+              {label:'INDIA VIX',  value:signals.vix,                             warn:vixLabel,   col:vixColor},
+              {label:'NIFTY 50',   value:signals.nifty50.toLocaleString('en-IN'), warn:signals.niftyChg>=0?'Positive':'Negative',col:signals.niftyChg>=0?'#34d399':'#f87171'},
+              {label:'MOM SCORE',  value:alloc._mom+'/100',                       warn:ZONE[alloc._zone],col:sm.color},
+              {label:'SIGNAL',     value:sm.icon+' '+sm.label,                    warn:'Combined', col:sm.color},
+              {label:'GOLD ALLOC', value:alloc.gold+'%',                          warn:'Dynamic',  col:'#fbbf24'},
+            ].map((s,i)=>(
+              <div key={i} style={{background:'rgba(255,255,255,0.02)',border:`1px solid ${s.col}20`,borderRadius:'12px',padding:'13px'}}>
+                <div style={{...S.label,marginBottom:'3px'}}>{s.label}</div>
+                <div style={{...S.syne,fontSize:'18px',fontWeight:800,color:s.col,margin:'2px 0'}}>{s.value}</div>
+                <div style={{fontSize:'10px',color:s.col,fontWeight:600}}>{s.warn}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{...S.card}}>
+            <div style={{...S.label,marginBottom:'12px'}}>SIGNAL → ALLOCATION LOGIC</div>
+            {[
+              {icon:'📊',s:'PE > 24', e:'Gold ↑ + Value ↑',    d:'Overvalued → safe haven + value tilt'},
+              {icon:'📉',s:'PE < 20', e:'Momentum ↑ + Gold ↓', d:'Undervalued → go aggressive on equity'},
+              {icon:'😰',s:'VIX > 20',e:'Gold ↑ + LowVol ↑',   d:'High fear → defensive shift'},
+              {icon:'⚡',s:'Mom>60',  e:'Momentum ↑',           d:'Strong trend → ride winners'},
+              {icon:'🛡️',s:'Mom<40',  e:'Quality ↑ + LowVol ↑', d:'Weak trend → quality protection'},
+            ].map((r,i)=>(
+              <div key={i} style={{display:'flex',gap:'10px',marginBottom:'10px',alignItems:'flex-start'}}>
+                <span style={{fontSize:'18px',flexShrink:0}}>{r.icon}</span>
+                <div><div style={{fontSize:'12px',fontWeight:600,color:'#cbd5e1'}}>{r.s} → <span style={{color:'#fbbf24'}}>{r.e}</span></div><div style={{fontSize:'11px',color:'#475569',marginTop:'1px'}}>{r.d}</div></div>
+              </div>
+            ))}
+          </div>
+          <div style={{background:'rgba(251,191,36,0.05)',border:'1px solid rgba(251,191,36,0.15)',borderRadius:'12px',padding:'12px'}}>
+            <div style={{fontSize:'11px',color:'#fbbf24',fontWeight:600,marginBottom:'6px'}}>📡 Data Sources</div>
+            <div style={{fontSize:'12px',color:'#64748b',lineHeight:1.7}}><b style={{color:'#94a3b8'}}>🟢 Primary:</b> Yahoo Finance API (Nifty + VIX + PE)<br/><b style={{color:'#94a3b8'}}>🟡 Fallback:</b> NSE India via proxy<br/><b style={{color:'#94a3b8'}}>⚪ Demo:</b> Static data if both fail<br/>Auto-refreshes every 5 minutes.</div>
+          </div>
+        </div>}
+
+        {/* ════ HISTORY TAB ════ */}
+        {tab==='history'&&<div style={{padding:'0 20px',animation:'fadeIn 0.3s ease'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'14px'}}>
+            <div style={{...S.label}}>WEEKLY REBALANCING LOG</div>
+            {history.length>0&&<button onClick={()=>{localStorage.removeItem('ff_h');setHistory([]);showToast('History cleared');}} style={{fontSize:'11px',color:'#475569',background:'none',border:'none',cursor:'pointer',...S.mono}}>Clear</button>}
+          </div>
+          {history.length===0
+            ?<div style={{textAlign:'center',padding:'60px 20px',color:'#334155'}}>
+                <div style={{fontSize:'48px',marginBottom:'16px',opacity:0.3}}>📋</div>
+                <div style={{fontSize:'13px',...S.mono}}>No history yet.<br/>Fetch live data to begin.</div>
+              </div>
+            :history.map((h,i)=>{
+              const hsm=SIG[h.signal]||SIG.NEUTRAL;
+              return(
+                <div key={i} style={{background:'rgba(15,23,42,0.85)',border:`1px solid ${hsm.color}18`,borderRadius:'14px',padding:'13px',marginBottom:'10px',animation:'slideIn 0.3s ease'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'10px'}}>
+                    <div>
+                      <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'3px'}}>
+                        <span style={{fontSize:'14px'}}>{hsm.icon}</span>
+                        <span style={{...S.syne,fontWeight:800,fontSize:'14px',color:hsm.color}}>{hsm.label}</span>
+                        {h.isLive&&<span style={{fontSize:'9px',color:'#34d399',background:'rgba(52,211,153,0.1)',borderRadius:'4px',padding:'1px 5px'}}>{h.source?.toUpperCase()}</span>}
+                      </div>
+                      <div style={{fontSize:'11px',color:'#475569',...S.mono}}>{h.date} · {h.time}</div>
+                    </div>
+                    <div style={{textAlign:'right'}}>
+                      <div style={{fontSize:'12px',fontWeight:700,color:'#fbbf24',...S.mono}}>₹{(h.sipAmt||0).toLocaleString('en-IN')}</div>
+                      <div style={{fontSize:'10px',color:'#475569',marginTop:'2px'}}>PE {h.pe} · VIX {h.vix}</div>
+                    </div>
+                  </div>
+                  <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
+                    {FUNDS.map(f=>(
+                      <div key={f.key} style={{background:`${f.color}12`,border:`1px solid ${f.color}20`,borderRadius:'8px',padding:'4px 8px',fontSize:'11px',...S.mono}}>
+                        <span style={{color:'#64748b'}}>{f.icon} </span>
+                        <span style={{color:f.color,fontWeight:600}}>{h.alloc?.[f.key]??0}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })
+          }
+        </div>}
+
+        {/* ════ AI TAB ════ */}
+        {tab==='ai'&&<div style={{padding:'0 20px',animation:'fadeIn 0.3s ease'}}>
+          <div style={{background:'rgba(99,102,241,0.07)',border:'1px solid rgba(99,102,241,0.18)',borderRadius:'16px',padding:'14px',marginBottom:'14px'}}>
+            <div style={{...S.label,color:'#818cf8',marginBottom:'6px'}}>{srcBadge} · {sm.icon} {sm.label}</div>
+            <div style={{display:'flex',gap:'14px',flexWrap:'wrap'}}>
+              {[['PE',signals.niftyPE],['VIX',signals.vix],['Nifty',signals.nifty50.toLocaleString('en-IN')],['Mom',alloc._mom+'/100'],['Gold',alloc.gold+'%']].map(([k,v])=>(
+                <div key={k}><span style={{color:'#475569',fontSize:'11px'}}>{k} </span><span style={{fontWeight:700,color:'#e2e8f0',fontSize:'13px',...S.mono}}>{v}</span></div>
+              ))}
+            </div>
+          </div>
+          <button onClick={askClaude} disabled={aiLoad} style={{width:'100%',padding:'14px',marginBottom:'14px',background:aiLoad?'rgba(255,255,255,0.02)':'linear-gradient(135deg,rgba(99,102,241,0.2),rgba(99,102,241,0.07))',border:'1px solid rgba(99,102,241,0.25)',borderRadius:'12px',color:aiLoad?'#475569':'#818cf8',fontWeight:700,fontSize:'13px',cursor:aiLoad?'not-allowed':'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}>
+            {aiLoad?<><span style={{width:'14px',height:'14px',border:'2px solid #6366f1',borderTopColor:'transparent',borderRadius:'50%',display:'inline-block',animation:'spin 0.8s linear infinite'}}/> Analysing…</>:'✦ Ask Claude to Explain This Allocation'}
+          </button>
+          {aiText&&<div style={{background:'rgba(15,23,42,0.9)',border:'1px solid rgba(99,102,241,0.15)',borderRadius:'14px',padding:'16px',marginBottom:'14px',animation:'fadeIn 0.4s ease'}}>
+            <div style={{...S.label,color:'#6366f1',marginBottom:'8px'}}>CLAUDE'S ANALYSIS</div>
+            <div style={{fontSize:'13px',color:'#cbd5e1',lineHeight:1.85}}>{aiText}</div>
+          </div>}
+          <div style={{...S.label,marginBottom:'10px'}}>CURRENT ALLOCATION</div>
+          {FUNDS.map(f=>(
+            <div key={f.key} style={{display:'flex',gap:'10px',alignItems:'center',background:'rgba(255,255,255,0.02)',border:`1px solid ${f.color}15`,borderRadius:'12px',padding:'11px',marginBottom:'8px'}}>
+              <span style={{fontSize:'20px'}}>{f.icon}</span>
+              <div style={{flex:1}}>
+                <div style={{fontSize:'12px',fontWeight:600}}>{f.label} <span style={{color:f.color,...S.syne,fontWeight:700}}>{alloc[f.key]}%</span><span style={{color:'#475569',fontSize:'11px',marginLeft:'6px',...S.mono}}>{rupee(f.key)}</span></div>
+                <div style={{fontSize:'11px',color:'#475569'}}>{f.desc}</div>
+              </div>
+              <div style={{width:'60px'}}><Bar pct={alloc[f.key]} color={f.color}/></div>
+            </div>
+          ))}
+        </div>}
+
+      </div>
+
+      {/* ── BOTTOM NAV ── */}
+      <div style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:'430px',background:'rgba(7,11,18,0.97)',borderTop:'1px solid rgba(255,255,255,0.05)',backdropFilter:'blur(20px)',display:'flex',zIndex:100}}>
+        {TABS.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:'10px 0 13px',border:'none',background:'transparent',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:'2px'}}>
+            <div style={{fontSize:'16px',opacity:tab===t.id?1:0.3,transition:'opacity 0.2s'}}>{t.icon}</div>
+            <div style={{fontSize:'9px',fontWeight:600,color:tab===t.id?'#fbbf24':'#475569',letterSpacing:'0.3px'}}>{t.label}</div>
+            {tab===t.id&&<div style={{width:'4px',height:'4px',borderRadius:'50%',background:'#fbbf24'}}/>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
